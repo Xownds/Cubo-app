@@ -1,46 +1,39 @@
-```javascript
 import GameScene from "./scenes/GameScene.js";
 
-/*
- * Configuração principal do jogo.
- *
- * Tudo que for específico da cena ficará dentro
- * de GameScene.js.
- */
-
+// Configuração principal do jogo
 const config = {
+    // Phaser tenta usar WebGL e usa Canvas como alternativa
     type: Phaser.AUTO,
 
-    // O jogo tentará usar WebGL e cairá para Canvas
-    // caso o dispositivo não tenha suporte.
+    // Configurações de renderização
     render: {
         antialias: true,
         pixelArt: false
     },
 
-    // Ajuste automático para celular e PC.
+    // Faz o jogo se adaptar ao tamanho da tela
     scale: {
         mode: Phaser.Scale.RESIZE,
         autoCenter: Phaser.Scale.CENTER_BOTH
     },
 
-    // 60 FPS como objetivo.
+    // Objetivo de 60 FPS
     fps: {
         target: 60,
         forceSetTimeOut: false
     },
 
-    // Entrada por mouse e toque.
+    // Permite entrada por mouse e toque
     input: {
         activePointers: 2
     },
 
-    // Cena principal.
+    // Cena principal do jogo
     scene: GameScene,
 
+    // Cor de fundo
     backgroundColor: "#111111"
 };
 
-// Inicializa o jogo.
+// Inicia o jogo
 new Phaser.Game(config);
-```
