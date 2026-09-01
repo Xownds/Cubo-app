@@ -4,92 +4,149 @@ export default class GameScene extends Phaser.Scene {
         super("GameScene");
 
         /*
-         * Container que contém todos os elementos
-         * do cenário.
-         *
-         * O cubo do jogador NÃO ficará aqui.
-         * Assim o cubo permanece parado no centro
-         * enquanto o cenário se movimenta.
+         * ============================================================
+         * CONFIGURAÇÕES DO MUNDO
+         * ============================================================
          */
+
+        // Container que contém as plataformas e elementos da fase.
         this.world = null;
 
+        // Tamanho aproximado do mundo.
+        this.worldWidth = 3600;
+        this.worldHeight = 2200;
+
         /*
-         * Guarda a última posição do dedo/mouse
-         * durante o arrasto.
+         * ============================================================
+         * CONTROLE DO ARRASTO
+         * ============================================================
          */
+
+        // Indica se o jogador está segurando a tela.
+        this.isDragging = false;
+
+        // Última posição conhecida do ponteiro.
         this.lastPointerX = 0;
         this.lastPointerY = 0;
 
-        /*
-         * Indica se o jogador está arrastando
-         * o cenário.
-         */
-        this.isDragging = false;
+        // Velocidade atual do mundo.
+        this.velocityX = 0;
+        this.velocityY = 0;
 
         /*
-         * Velocidade do arrasto.
+         * Velocidade desejada.
          *
-         * 1 = acompanha exatamente o dedo.
+         * O cenário não acompanha o dedo de forma seca.
+         * Ele vai suavemente até a posição desejada.
          */
-        this.dragSpeed = 1;
+        this.targetVelocityX = 0;
+        this.targetVelocityY = 0;
+
+        // Intensidade do movimento.
+        this.dragStrength = 1;
+
+        // Quanto tempo leva para atingir a velocidade desejada.
+        this.acceleration = 0.18;
+
+        // Força da desaceleração quando o dedo é solto.
+        this.friction = 0.88;
+
+        // Velocidade máxima do cenário.
+        this.maxVelocity = 55;
+
+        /*
+         * ============================================================
+         * LIMITES DA CÂMERA / MUNDO
+         * ============================================================
+         */
+
+        this.minWorldX = 0;
+        this.maxWorldX = 0;
+
+        this.minWorldY = 0;
+        this.maxWorldY = 0;
     }
 
     create() {
 
         /*
-         * Cria o container do mundo.
+         * ============================================================
+         * FUNDO
+         * ============================================================
          *
-         * Tudo que pertence ao cenário será colocado
-         * dentro dele.
+         * O fundo fica FORA do mundo.
+         *
+         * Assim ele permanece parado enquanto as plataformas
+         * se movimentam.
          */
-        this.world = this.add.container(0, 0);
 
-        // Cria o fundo.
         this.createBackground();
 
-        // Cria a grade do cenário.
-        this.createGrid();
+        /*
+         * ============================================================
+         * MUNDO
+         * ============================================================
+         */
 
-        // Cria o cubo do jogador.
+        this.world = this.add.container(
+            this.scale.width / 2,
+            this.scale.height / 2
+        );
+
+        /*
+         * Cria os elementos da fase.
+         */
+        this.createLevel();
+
+        /*
+         * Cria o cubo.
+         *
+         * O cubo fica fora do world e permanece no centro.
+         */
         this.createPlayer();
 
         /*
-         * Quando o jogador toca ou clica na tela,
-         * começa o arrasto.
+         * Calcula os limites que o mundo pode atingir.
          */
+        this.updateWorldBounds();
+
+        /*
+         * ============================================================
+         * CONTROLES
+         * ============================================================
+         */
+
         this.input.on(
             "pointerdown",
             this.startDrag,
             this
         );
 
-        /*
-         * Enquanto o dedo/mouse se movimenta,
-         * movimentamos o cenário.
-         */
         this.input.on(
             "pointermove",
             this.moveWorld,
             this
         );
 
-        /*
-         * Quando solta o dedo/mouse,
-         * termina o arrasto.
-         */
         this.input.on(
             "pointerup",
             this.stopDrag,
             this
         );
 
-        /*
-         * Também encerra o arrasto caso o ponteiro
-         * saia da área do jogo.
-         */
         this.input.on(
             "pointerupoutside",
             this.stopDrag,
+            this
+        );
+
+        /*
+         * Quando a tela muda de tamanho, recalculamos
+         * os limites do mundo.
+         */
+        this.scale.on(
+            "resize",
+            this.handleResize,
             this
         );
     }
@@ -97,197 +154,420 @@ export default class GameScene extends Phaser.Scene {
     createBackground() {
 
         /*
-         * Cria o fundo do mundo.
-         *
-         * Ele fica dentro do container "world",
-         * então acompanha o cenário.
+         * ============================================================
+         * FUNDO
+         * ============================================================
          */
 
         const width = this.scale.width;
         const height = this.scale.height;
 
-        const background = this.add.rectangle(
+        /*
+         * Fundo principal.
+         */
+        this.background = this.add.rectangle(
             width / 2,
             height / 2,
             width,
             height,
-            0x151515
+            0x0d1017
         );
 
-        background.setOrigin(0.5);
+        this.background.setDepth(-10);
 
-        this.world.add(background);
+        /*
+         * Pequenos pontos decorativos.
+         *
+         * Eles ficam no fundo e não acompanham o mundo.
+         */
+        this.backgroundDetails = this.add.graphics();
+
+        this.backgroundDetails.setDepth(-9);
+
+        this.drawBackgroundDetails();
     }
 
-    createGrid() {
+    drawBackgroundDetails() {
 
         /*
-         * Cria uma grade grande para representar
-         * o cenário.
-         *
-         * Nesta primeira etapa ela serve para
-         * enxergarmos claramente o movimento.
-         *
-         * Futuramente ela será substituída pelas
-         * fases, plataformas, obstáculos etc.
+         * Limpa os detalhes antigos.
          */
-
-        const gridSize = 80;
-
-        const worldWidth = 3000;
-        const worldHeight = 3000;
-
-        const graphics = this.add.graphics();
+        this.backgroundDetails.clear();
 
         /*
-         * Define a aparência das linhas da grade.
+         * Desenha pequenos pontos no fundo.
          */
-        graphics.lineStyle(
-            1,
-            0x292929,
+        this.backgroundDetails.fillStyle(
+            0x1b2230,
+            0.8
+        );
+
+        const width = this.scale.width;
+        const height = this.scale.height;
+
+        const spacing = 90;
+
+        for (
+            let x = 0;
+            x <= width;
+            x += spacing
+        ) {
+            for (
+                let y = 0;
+                y <= height;
+                y += spacing
+            ) {
+
+                this.backgroundDetails.fillCircle(
+                    x,
+                    y,
+                    2
+                );
+            }
+        }
+    }
+
+    createLevel() {
+
+        /*
+         * ============================================================
+         * FASE
+         * ============================================================
+         *
+         * Agora temos plataformas reais.
+         *
+         * As posições são relativas ao centro do mundo.
+         */
+
+        this.createPlatform(
+            -900,
+            500,
+            500,
+            70
+        );
+
+        this.createPlatform(
+            -250,
+            350,
+            350,
+            70
+        );
+
+        this.createPlatform(
+            300,
+            200,
+            300,
+            70
+        );
+
+        this.createPlatform(
+            750,
+            50,
+            420,
+            70
+        );
+
+        this.createPlatform(
+            100,
+            -150,
+            380,
+            70
+        );
+
+        this.createPlatform(
+            -550,
+            -250,
+            450,
+            70
+        );
+
+        this.createPlatform(
+            -1100,
+            -50,
+            300,
+            70
+        );
+
+        this.createPlatform(
+            900,
+            -350,
+            500,
+            70
+        );
+
+        this.createPlatform(
+            300,
+            -550,
+            320,
+            70
+        );
+
+        /*
+         * Plataforma inicial.
+         *
+         * O cubo começa visualmente sobre ela.
+         */
+        this.createPlatform(
+            0,
+            300,
+            260,
+            70
+        );
+
+        /*
+         * Plataforma final.
+         */
+        this.createPlatform(
+            1100,
+            450,
+            500,
+            70
+        );
+
+        /*
+         * Decoração no mundo.
+         */
+        this.createWorldDecorations();
+    }
+
+    createPlatform(
+        x,
+        y,
+        width,
+        height
+    ) {
+
+        /*
+         * Cria uma plataforma com aparência
+         * mais próxima de um jogo real.
+         */
+
+        const platform = this.add.graphics();
+
+        /*
+         * Corpo da plataforma.
+         */
+        platform.fillStyle(
+            0x252c38,
+            1
+        );
+
+        platform.fillRoundedRect(
+            x - width / 2,
+            y - height / 2,
+            width,
+            height,
+            14
+        );
+
+        /*
+         * Parte superior da plataforma.
+         */
+        platform.fillStyle(
+            0x4b5668,
+            1
+        );
+
+        platform.fillRoundedRect(
+            x - width / 2,
+            y - height / 2,
+            width,
+            10,
+            5
+        );
+
+        /*
+         * Pequeno detalhe inferior.
+         */
+        platform.lineStyle(
+            2,
+            0x151a22,
+            1
+        );
+
+        platform.strokeRoundedRect(
+            x - width / 2,
+            y - height / 2,
+            width,
+            height,
+            14
+        );
+
+        this.world.add(platform);
+    }
+
+    createWorldDecorations() {
+
+        /*
+         * ============================================================
+         * DECORAÇÕES
+         * ============================================================
+         */
+
+        const decorations = this.add.graphics();
+
+        decorations.lineStyle(
+            2,
+            0x202735,
             1
         );
 
         /*
-         * Cria as linhas verticais.
+         * Algumas linhas decorativas grandes.
          */
-        for (
-            let x = -worldWidth;
-            x <= worldWidth;
-            x += gridSize
-        ) {
-            graphics.lineBetween(
-                x,
-                -worldHeight,
-                x,
-                worldHeight
-            );
-        }
-
-        /*
-         * Cria as linhas horizontais.
-         */
-        for (
-            let y = -worldHeight;
-            y <= worldHeight;
-            y += gridSize
-        ) {
-            graphics.lineBetween(
-                -worldWidth,
-                y,
-                worldWidth,
-                y
-            );
-        }
-
-        this.world.add(graphics);
-
-        /*
-         * Marca o centro original do cenário.
-         *
-         * Isso ajuda a perceber que o mundo está
-         * se movimentando enquanto o cubo permanece
-         * parado.
-         */
-        const centerPoint = this.add.circle(
-            0,
-            0,
-            5,
-            0x555555
+        decorations.lineBetween(
+            -1500,
+            800,
+            1500,
+            800
         );
 
-        this.world.add(centerPoint);
+        decorations.lineBetween(
+            -1500,
+            -800,
+            1500,
+            -800
+        );
 
         /*
-         * Posiciona o mundo no centro da tela.
+         * Pequenos círculos espalhados pelo mundo.
          */
-        this.world.x = this.scale.width / 2;
-        this.world.y = this.scale.height / 2;
+        decorations.fillStyle(
+            0x313b4c,
+            0.8
+        );
+
+        const points = [
+            [-1300, 500],
+            [-800, -500],
+            [-300, 700],
+            [500, -700],
+            [1000, 100],
+            [1300, -500]
+        ];
+
+        for (const point of points) {
+
+            decorations.fillCircle(
+                point[0],
+                point[1],
+                5
+            );
+        }
+
+        this.world.add(decorations);
     }
 
     createPlayer() {
 
         /*
-         * Cria o cubo do jogador.
+         * ============================================================
+         * JOGADOR
+         * ============================================================
          *
-         * IMPORTANTE:
-         * O cubo fica diretamente na cena,
-         * e NÃO dentro do "world".
-         *
-         * Por isso ele não acompanha o cenário.
+         * O cubo permanece sempre no centro da tela.
          */
 
-        const size = 60;
+        const size = 58;
 
+        /*
+         * Sombra do cubo.
+         */
+        this.playerShadow = this.add.rectangle(
+            this.scale.width / 2 + 6,
+            this.scale.height / 2 + 8,
+            size,
+            size,
+            0x000000,
+            0.35
+        );
+
+        this.playerShadow.setDepth(5);
+
+        /*
+         * Corpo do cubo.
+         */
         this.player = this.add.rectangle(
             this.scale.width / 2,
             this.scale.height / 2,
             size,
             size,
-            0xffffff
+            0xf5f7fa
         );
 
-        this.player.setOrigin(0.5);
+        this.player.setDepth(6);
 
         /*
-         * Adiciona uma borda preta ao cubo.
+         * Borda do cubo.
          */
         this.player.setStrokeStyle(
             4,
-            0x000000
+            0x090b0f
         );
 
         /*
-         * Cria uma pequena sombra para deixar
-         * o cubo mais destacado.
+         * Detalhe interno para dar um pouco
+         * mais de personalidade ao cubo.
          */
-        this.playerShadow = this.add.rectangle(
-            this.player.x + 5,
-            this.player.y + 5,
-            size,
-            size,
-            0x000000,
-            0.25
+        this.playerHighlight = this.add.rectangle(
+            this.player.x - 10,
+            this.player.y - 10,
+            10,
+            10,
+            0xffffff,
+            0.7
         );
 
-        /*
-         * A sombra fica atrás do cubo.
-         */
-        this.playerShadow.setDepth(0);
+        this.playerHighlight.setDepth(7);
 
         /*
-         * O cubo fica na frente da sombra.
+         * Pequena animação de respiração.
+         *
+         * Ainda não é animação de morte ou movimento.
+         * É apenas um movimento visual muito sutil.
          */
-        this.player.setDepth(1);
+        this.tweens.add({
+            targets: this.player,
+            scaleX: 1.025,
+            scaleY: 1.025,
+            duration: 700,
+            yoyo: true,
+            repeat: -1,
+            ease: "Sine.easeInOut"
+        });
     }
 
     startDrag(pointer) {
 
         /*
-         * Guarda a posição inicial do ponteiro.
+         * Começa um novo arrasto.
          */
+
+        this.isDragging = true;
+
         this.lastPointerX = pointer.x;
         this.lastPointerY = pointer.y;
 
         /*
-         * Ativa o modo de arrasto.
+         * Zera a velocidade ao começar um novo
+         * movimento manual.
          */
-        this.isDragging = true;
+        this.velocityX = 0;
+        this.velocityY = 0;
     }
 
     moveWorld(pointer) {
 
         /*
-         * Se não estiver arrastando,
-         * não fazemos nada.
+         * Só movimenta o mundo enquanto o dedo
+         * ou mouse estiver pressionado.
          */
         if (!this.isDragging) {
             return;
         }
 
         /*
-         * Calcula quanto o dedo/mouse se moveu
-         * desde a última atualização.
+         * Calcula a distância percorrida pelo dedo.
          */
         const deltaX =
             pointer.x - this.lastPointerX;
@@ -296,17 +576,25 @@ export default class GameScene extends Phaser.Scene {
             pointer.y - this.lastPointerY;
 
         /*
-         * Move o cenário de acordo com o movimento
+         * A velocidade desejada acompanha o movimento
          * do dedo.
          */
-        this.world.x +=
-            deltaX * this.dragSpeed;
+        this.targetVelocityX =
+            Phaser.Math.Clamp(
+                deltaX * this.dragStrength,
+                -this.maxVelocity,
+                this.maxVelocity
+            );
 
-        this.world.y +=
-            deltaY * this.dragSpeed;
+        this.targetVelocityY =
+            Phaser.Math.Clamp(
+                deltaY * this.dragStrength,
+                -this.maxVelocity,
+                this.maxVelocity
+            );
 
         /*
-         * Atualiza a posição anterior do ponteiro.
+         * Atualiza a posição do ponteiro.
          */
         this.lastPointerX = pointer.x;
         this.lastPointerY = pointer.y;
@@ -316,16 +604,94 @@ export default class GameScene extends Phaser.Scene {
 
         /*
          * Finaliza o arrasto.
+         *
+         * A velocidade atual continua por alguns instantes,
+         * criando a sensação de inércia.
          */
         this.isDragging = false;
+
+        this.targetVelocityX = 0;
+        this.targetVelocityY = 0;
     }
 
     update() {
 
         /*
-         * Mantém o cubo exatamente no centro
-         * mesmo quando a tela muda de tamanho.
+         * ============================================================
+         * MOVIMENTO SUAVE DO MUNDO
+         * ============================================================
          */
+
+        if (this.isDragging) {
+
+            /*
+             * Aproxima a velocidade atual da velocidade
+             * desejada suavemente.
+             */
+            this.velocityX = Phaser.Math.Linear(
+                this.velocityX,
+                this.targetVelocityX,
+                this.acceleration
+            );
+
+            this.velocityY = Phaser.Math.Linear(
+                this.velocityY,
+                this.targetVelocityY,
+                this.acceleration
+            );
+
+        } else {
+
+            /*
+             * Quando o jogador solta o dedo,
+             * o mundo desacelera naturalmente.
+             */
+            this.velocityX *= this.friction;
+            this.velocityY *= this.friction;
+
+            /*
+             * Evita que valores muito pequenos
+             * continuem sendo processados.
+             */
+            if (Math.abs(this.velocityX) < 0.05) {
+                this.velocityX = 0;
+            }
+
+            if (Math.abs(this.velocityY) < 0.05) {
+                this.velocityY = 0;
+            }
+        }
+
+        /*
+         * Aplica a velocidade ao mundo.
+         */
+        this.world.x += this.velocityX;
+        this.world.y += this.velocityY;
+
+        /*
+         * ============================================================
+         * LIMITES DO MUNDO
+         * ============================================================
+         */
+
+        this.world.x = Phaser.Math.Clamp(
+            this.world.x,
+            this.minWorldX,
+            this.maxWorldX
+        );
+
+        this.world.y = Phaser.Math.Clamp(
+            this.world.y,
+            this.minWorldY,
+            this.maxWorldY
+        );
+
+        /*
+         * ============================================================
+         * MANTÉM O CUBO NO CENTRO
+         * ============================================================
+         */
+
         const centerX =
             this.scale.width / 2;
 
@@ -337,12 +703,103 @@ export default class GameScene extends Phaser.Scene {
             centerY
         );
 
-        /*
-         * Mantém a sombra alinhada com o cubo.
-         */
         this.playerShadow.setPosition(
-            centerX + 5,
-            centerY + 5
+            centerX + 6,
+            centerY + 8
+        );
+
+        this.playerHighlight.setPosition(
+            centerX - 10,
+            centerY - 10
+        );
+    }
+
+    updateWorldBounds() {
+
+        /*
+         * ============================================================
+         * LIMITES DO MUNDO
+         * ============================================================
+         *
+         * Impede que o jogador arraste o cenário
+         * para fora da área útil da fase.
+         */
+
+        const halfWidth =
+            this.worldWidth / 2;
+
+        const halfHeight =
+            this.worldHeight / 2;
+
+        const screenHalfWidth =
+            this.scale.width / 2;
+
+        const screenHalfHeight =
+            this.scale.height / 2;
+
+        this.minWorldX =
+            screenHalfWidth - halfWidth;
+
+        this.maxWorldX =
+            screenHalfWidth + halfWidth;
+
+        this.minWorldY =
+            screenHalfHeight - halfHeight;
+
+        this.maxWorldY =
+            screenHalfHeight + halfHeight;
+    }
+
+    handleResize(gameSize) {
+
+        /*
+         * ============================================================
+         * REDIMENSIONAMENTO
+         * ============================================================
+         */
+
+        const width = gameSize.width;
+        const height = gameSize.height;
+
+        /*
+         * Atualiza o fundo.
+         */
+        this.background.setPosition(
+            width / 2,
+            height / 2
+        );
+
+        this.background.setSize(
+            width,
+            height
+        );
+
+        /*
+         * Redesenha os detalhes do fundo.
+         */
+        this.drawBackgroundDetails();
+
+        /*
+         * Atualiza os limites do mundo.
+         */
+        this.updateWorldBounds();
+
+        /*
+         * Mantém o cubo no centro.
+         */
+        this.player.setPosition(
+            width / 2,
+            height / 2
+        );
+
+        this.playerShadow.setPosition(
+            width / 2 + 6,
+            height / 2 + 8
+        );
+
+        this.playerHighlight.setPosition(
+            width / 2 - 10,
+            height / 2 - 10
         );
     }
 }
