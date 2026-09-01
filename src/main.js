@@ -3,42 +3,68 @@ import GameScene from "./scenes/GameScene.js";
 /*
  * Configuração principal do jogo.
  *
- * Tudo que for específico da cena ficará dentro
- * de GameScene.js.
+ * O Phaser já é carregado pelo index.html antes
+ * deste arquivo ser executado.
  */
 
 const config = {
+    /*
+     * Phaser.AUTO faz o jogo tentar usar WebGL.
+     * Se WebGL não estiver disponível, ele usa Canvas.
+     */
     type: Phaser.AUTO,
 
-    // O jogo tentará usar WebGL e cairá para Canvas
-    // caso o dispositivo não tenha suporte.
+    /*
+     * Configurações de renderização.
+     */
     render: {
         antialias: true,
         pixelArt: false
     },
 
-    // Ajuste automático para celular e PC.
+    /*
+     * Faz o jogo ocupar e acompanhar
+     * o tamanho da tela.
+     *
+     * Isso será importante quando colocarmos
+     * o jogo no Android.
+     */
     scale: {
         mode: Phaser.Scale.RESIZE,
         autoCenter: Phaser.Scale.CENTER_BOTH
     },
 
-    // 60 FPS como objetivo.
+    /*
+     * Objetivo de 60 FPS.
+     */
     fps: {
         target: 60,
         forceSetTimeOut: false
     },
 
-    // Entrada por mouse e toque.
+    /*
+     * Permite utilizar mouse e toque.
+     *
+     * activePointers: 2 permite até dois
+     * pontos de toque simultâneos.
+     */
     input: {
         activePointers: 2
     },
 
-    // Cena principal.
+    /*
+     * Define a cena que será executada
+     * quando o jogo começar.
+     */
     scene: GameScene,
 
+    /*
+     * Cor de fundo inicial do jogo.
+     */
     backgroundColor: "#111111"
 };
 
-// Inicializa o jogo.
+/*
+ * Cria e inicia o jogo Phaser.
+ */
 new Phaser.Game(config);
