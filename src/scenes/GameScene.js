@@ -1,60 +1,106 @@
-```javascript
 export default class GameScene extends Phaser.Scene {
 
     constructor() {
         super("GameScene");
 
-        // Grupo que representa tudo que pertence ao cenário.
-        // No futuro teremos aqui:
-        // gelo, lava, espinhos, plataformas, obstáculos etc.
+        /*
+         * Container que contém todos os elementos
+         * do cenário.
+         *
+         * O cubo do jogador NÃO ficará aqui.
+         * Assim o cubo permanece parado no centro
+         * enquanto o cenário se movimenta.
+         */
         this.world = null;
 
-        // Posição anterior do dedo/mouse.
+        /*
+         * Guarda a última posição do dedo/mouse
+         * durante o arrasto.
+         */
         this.lastPointerX = 0;
         this.lastPointerY = 0;
 
-        // Indica se o jogador está arrastando.
+        /*
+         * Indica se o jogador está arrastando
+         * o cenário.
+         */
         this.isDragging = false;
 
-        // Velocidade do movimento.
+        /*
+         * Velocidade do arrasto.
+         *
+         * 1 = acompanha exatamente o dedo.
+         */
         this.dragSpeed = 1;
     }
 
     create() {
 
         /*
-         * Cria um container para o cenário.
+         * Cria o container do mundo.
          *
-         * IMPORTANTE:
-         * O cubo NÃO ficará nesse container.
-         *
-         * Assim conseguimos deixar o cubo parado
-         * enquanto movimentamos apenas o mundo.
+         * Tudo que pertence ao cenário será colocado
+         * dentro dele.
          */
         this.world = this.add.container(0, 0);
 
+        // Cria o fundo.
         this.createBackground();
+
+        // Cria a grade do cenário.
         this.createGrid();
+
+        // Cria o cubo do jogador.
         this.createPlayer();
 
         /*
-         * Eventos de toque/mouse.
+         * Quando o jogador toca ou clica na tela,
+         * começa o arrasto.
          */
-        this.input.on("pointerdown", this.startDrag, this);
+        this.input.on(
+            "pointerdown",
+            this.startDrag,
+            this
+        );
 
-        this.input.on("pointermove", this.moveWorld, this);
+        /*
+         * Enquanto o dedo/mouse se movimenta,
+         * movimentamos o cenário.
+         */
+        this.input.on(
+            "pointermove",
+            this.moveWorld,
+            this
+        );
 
-        this.input.on("pointerup", this.stopDrag, this);
-        this.input.on("pointerupoutside", this.stopDrag, this);
+        /*
+         * Quando solta o dedo/mouse,
+         * termina o arrasto.
+         */
+        this.input.on(
+            "pointerup",
+            this.stopDrag,
+            this
+        );
+
+        /*
+         * Também encerra o arrasto caso o ponteiro
+         * saia da área do jogo.
+         */
+        this.input.on(
+            "pointerupoutside",
+            this.stopDrag,
+            this
+        );
     }
 
     createBackground() {
 
         /*
-         * Fundo do jogo.
+         * Cria o fundo do mundo.
          *
-         * Ele também pertence ao mundo,
-         * portanto se movimentará junto.
+         * Ele fica dentro do container "world",
+         * então acompanha o cenário.
          */
 
         const width = this.scale.width;
@@ -76,25 +122,40 @@ export default class GameScene extends Phaser.Scene {
     createGrid() {
 
         /*
-         * Cria uma grade simples para deixar
-         * o movimento do cenário visível.
+         * Cria uma grade grande para representar
+         * o cenário.
          *
-         * Essa grade será substituída futuramente
-         * pelo cenário real das fases.
+         * Nesta primeira etapa ela serve para
+         * enxergarmos claramente o movimento.
+         *
+         * Futuramente ela será substituída pelas
+         * fases, plataformas, obstáculos etc.
          */
 
-        const size = 80;
+        const gridSize = 80;
 
         const worldWidth = 3000;
         const worldHeight = 3000;
 
         const graphics = this.add.graphics();
 
-        graphics.lineStyle(1, 0x292929, 1);
+        /*
+         * Define a aparência das linhas da grade.
+         */
+        graphics.lineStyle(
+            1,
+            0x292929,
+            1
+        );
 
-        // Linhas verticais.
-        for (let x = -worldWidth; x <= worldWidth; x += size) {
-
+        /*
+         * Cria as linhas verticais.
+         */
+        for (
+            let x = -worldWidth;
+            x <= worldWidth;
+            x += gridSize
+        ) {
             graphics.lineBetween(
                 x,
                 -worldHeight,
@@ -103,9 +164,14 @@ export default class GameScene extends Phaser.Scene {
             );
         }
 
-        // Linhas horizontais.
-        for (let y = -worldHeight; y <= worldHeight; y += size) {
-
+        /*
+         * Cria as linhas horizontais.
+         */
+        for (
+            let y = -worldHeight;
+            y <= worldHeight;
+            y += gridSize
+        ) {
             graphics.lineBetween(
                 -worldWidth,
                 y,
@@ -117,10 +183,11 @@ export default class GameScene extends Phaser.Scene {
         this.world.add(graphics);
 
         /*
-         * Pequeno ponto central do mundo.
+         * Marca o centro original do cenário.
          *
-         * Ele ajuda a perceber que o cenário
-         * está se movimentando em relação ao cubo.
+         * Isso ajuda a perceber que o mundo está
+         * se movimentando enquanto o cubo permanece
+         * parado.
          */
         const centerPoint = this.add.circle(
             0,
@@ -132,8 +199,7 @@ export default class GameScene extends Phaser.Scene {
         this.world.add(centerPoint);
 
         /*
-         * Posiciona o mundo inicialmente no centro
-         * da tela.
+         * Posiciona o mundo no centro da tela.
          */
         this.world.x = this.scale.width / 2;
         this.world.y = this.scale.height / 2;
@@ -142,10 +208,13 @@ export default class GameScene extends Phaser.Scene {
     createPlayer() {
 
         /*
-         * O jogador fica FORA do container "world".
+         * Cria o cubo do jogador.
          *
-         * Isso faz o cubo permanecer exatamente
-         * no centro enquanto o cenário se movimenta.
+         * IMPORTANTE:
+         * O cubo fica diretamente na cena,
+         * e NÃO dentro do "world".
+         *
+         * Por isso ele não acompanha o cenário.
          */
 
         const size = 60;
@@ -161,7 +230,7 @@ export default class GameScene extends Phaser.Scene {
         this.player.setOrigin(0.5);
 
         /*
-         * Borda do cubo.
+         * Adiciona uma borda preta ao cubo.
          */
         this.player.setStrokeStyle(
             4,
@@ -169,7 +238,8 @@ export default class GameScene extends Phaser.Scene {
         );
 
         /*
-         * Pequena sombra para dar profundidade.
+         * Cria uma pequena sombra para deixar
+         * o cubo mais destacado.
          */
         this.playerShadow = this.add.rectangle(
             this.player.x + 5,
@@ -181,37 +251,43 @@ export default class GameScene extends Phaser.Scene {
         );
 
         /*
-         * A sombra precisa ficar atrás do cubo.
+         * A sombra fica atrás do cubo.
          */
         this.playerShadow.setDepth(0);
 
+        /*
+         * O cubo fica na frente da sombra.
+         */
         this.player.setDepth(1);
     }
 
     startDrag(pointer) {
 
         /*
-         * Guarda a posição inicial do toque.
+         * Guarda a posição inicial do ponteiro.
          */
         this.lastPointerX = pointer.x;
         this.lastPointerY = pointer.y;
 
+        /*
+         * Ativa o modo de arrasto.
+         */
         this.isDragging = true;
     }
 
     moveWorld(pointer) {
 
         /*
-         * Só movimentamos o cenário se
-         * o jogador estiver arrastando.
+         * Se não estiver arrastando,
+         * não fazemos nada.
          */
         if (!this.isDragging) {
             return;
         }
 
         /*
-         * Calcula quanto o dedo se moveu
-         * desde o último frame/evento.
+         * Calcula quanto o dedo/mouse se moveu
+         * desde a última atualização.
          */
         const deltaX =
             pointer.x - this.lastPointerX;
@@ -220,17 +296,17 @@ export default class GameScene extends Phaser.Scene {
             pointer.y - this.lastPointerY;
 
         /*
-         * Movemos o cenário na mesma direção
+         * Move o cenário de acordo com o movimento
          * do dedo.
-         *
-         * Depois podemos inverter esse comportamento
-         * caso o controle fique mais natural para o jogo.
          */
-        this.world.x += deltaX * this.dragSpeed;
-        this.world.y += deltaY * this.dragSpeed;
+        this.world.x +=
+            deltaX * this.dragSpeed;
+
+        this.world.y +=
+            deltaY * this.dragSpeed;
 
         /*
-         * Atualiza a última posição.
+         * Atualiza a posição anterior do ponteiro.
          */
         this.lastPointerX = pointer.x;
         this.lastPointerY = pointer.y;
@@ -247,22 +323,26 @@ export default class GameScene extends Phaser.Scene {
     update() {
 
         /*
-         * Mantém o jogador exatamente no centro
-         * caso a tela seja redimensionada.
+         * Mantém o cubo exatamente no centro
+         * mesmo quando a tela muda de tamanho.
          */
+        const centerX =
+            this.scale.width / 2;
 
-        const centerX = this.scale.width / 2;
-        const centerY = this.scale.height / 2;
+        const centerY =
+            this.scale.height / 2;
 
         this.player.setPosition(
             centerX,
             centerY
         );
 
+        /*
+         * Mantém a sombra alinhada com o cubo.
+         */
         this.playerShadow.setPosition(
             centerX + 5,
             centerY + 5
         );
     }
 }
-```
